@@ -1,4 +1,4 @@
-// mem_if.sv
+// memory_interface.sv
 //
 // Backing store model. Fixed MEM_LATENCY-cycle response (start simple;
 // a later stretch goal is variable/bursty latency to stress-test
@@ -10,7 +10,7 @@
 
 import cache_pkg::*;
 
-module mem_if #(
+module memory_interface #(
     parameter int MEM_SIZE_LINES = 4096  // backing store depth, in lines
 ) (
     input  logic                  clk,
@@ -27,4 +27,4 @@ module mem_if #(
     output line_data_t            rd_line        // valid for MEM_READ on req_done
 );
 
-endmodule : mem_if
+endmodule : memory_interface

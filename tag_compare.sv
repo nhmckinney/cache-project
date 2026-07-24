@@ -22,4 +22,19 @@ module tag_compare (
     output tag_t                  victim_tag
 );
 
+    always_comb begin
+        hit = 1'b0;
+        hit_way = '0;
+
+        for (int w = 0; w < WAYS; w++) begin
+            if (set_entries[w].valid && set_entries[w].tag == req_tag) begin
+                hit = 1'b1;
+                hit_way = way_t'(w);
+            end
+        end
+    end
+
+    assign victim_dirty = set_entries[victim_way].dirty;
+    assign victim_tag = set_entries[victim_way].tag;
+
 endmodule : tag_compare

@@ -1,4 +1,4 @@
-// dma_stream_if.sv
+// dma_stream_interface.sv
 //
 // AXI-Stream-style burst front end. Accepts a burst descriptor
 // (start address, length, read/write) and, for writes, a stream of
@@ -11,7 +11,7 @@
 
 import cache_pkg::*;
 
-module dma_stream_if (
+module dma_stream_interface (
     input  logic                  clk,
     input  logic                  rst_n,
 
@@ -46,4 +46,4 @@ module dma_stream_if (
     input  logic                  cc_resp_hit
 );
 
-endmodule : dma_stream_if
+endmodule : dma_stream_interface

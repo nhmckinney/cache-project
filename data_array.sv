@@ -30,4 +30,25 @@ module data_array (
     input  data_t                 wr_word_data
 );
 
+    line_data_t mem [NUM_SETS][WAYS];
+
+    assign rd_line = mem[rd_index][rd_way];
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            for (int s = 0; s < NUM_SETS; s++) begin
+                for (int w = 0; w < WAYS; w++) begin
+                    mem[s][w] <= '0;
+                end
+            end
+        end else begin
+            if (wr_en) begin
+                mem[wr_index][wr_way] <= wr_line;
+            end
+            if (wr_word_en) begin
+                mem[wr_word_index][wr_word_way][(wr_word_offset * DATA_WIDTH) +: DATA_WIDTH] <= wr_word_data;
+            end
+        end
+    end
+
 endmodule : data_array
