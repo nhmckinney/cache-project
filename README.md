@@ -1,144 +1,37 @@
 # Cache Project
 
-A 2-way set-associative L1 cache with DMA streaming interface, designed for FPGA-based systems. Currently targeting synthesis on a Digilent Basys3 Artix-7 board.
+L1 cache implementation (2-way set-associative) with DMA streaming interface. Currently working on getting it to synthesize on a Basys3.
 
-## Current Project State
+## Status
 
-### Phase 1: Core Cache RTL (Complete)
-- [x] Basic tag/data array storage
-- [x] Hit/miss detection logic
-- [x] Simple miss FSM for memory fill
-- [x] DMA streaming burst translation
-- [x] SystemVerilog 2012 implementation with full module hierarchy
+- Core RTL done (tag/data arrays, hit/miss detection, miss FSM, DMA interface)
+- Basys3 constraints and test counter module
+- Next: validate synthesis, integrate cache to hardware
 
-### Phase 2: FPGA Board Integration (In Progress)
-- [x] Basys3 Artix-7 constraints file (`basys3.xdc`)
-- [x] Test counter module (`basys3_top.sv`) for synthesis validation
-  - Displays 16-bit counter on LEDs and 7-segment display
-  - ~1 Hz counter increment with 1 kHz display multiplexing
-  - Ready for synthesis to verify toolchain and board connectivity
-- [ ] Comprehensive testbench coverage
-- [ ] Timing closure on Basys3
+## What's in Here
 
-## Architecture Overview
+**RTL modules** (`src/`):
+- `cache_controller.sv` — main logic
+- `tag_array.sv`, `data_array.sv` — storage
+- `tag_compare.sv`, `replacement_policy.sv`, `miss_fsm.sv` — cache operations
+- `cache_pkg.sv` — params (16 sets, 2 ways, 32-bit words)
 
-The cache subsystem provides:
-- **Cache Controller**: Orchestrates hit/miss logic, tag/data arrays, and replacement policy
-- **2-way Set-Associative Design**: 16 sets, 2 ways per set (configurable via `cache_pkg.sv`)
-- **DMA Streaming Interface**: AXI-Stream-style burst descriptor and data path
-- **Backing Memory Interface**: Abstract interface to off-chip or different-clocked memory
-- **Miss Handling FSM**: State machine for memory transactions and cache line fills
+**Basys3 stuff**:
+- `basys3.xdc` — pin constraints for Artix-7
+- `basys3_top.sv` — simple counter test (LEDs + 7-seg display)
 
-## Module Hierarchy
+**Testing**:
+- `tb/cache_tb.sv` — simulation testbench
 
-```
-cache_controller (top-level cache logic)
-├── tag_array (per-way metadata: valid, dirty, tag)
-├── data_array (per-way cache line storage)
-├── tag_compare (hit/miss detection)
-├── replacement_policy (LRU or round-robin eviction)
-└── miss_fsm (memory transaction orchestration)
+## Quick Start
 
-dma_stream_if (front-end interface translator)
-└── connects to cache_controller
+To synthesize the test counter on Basys3:
+1. Create Vivado project (Artix-7, XC7A35T)
+2. Add files from `src/` and `basys3.xdc` constraint
+3. Set top module to `basys3_top`
+4. Synthesize → implement → generate bitstream
+5. Program and watch the counter increment on LEDs/7-seg
 
-mem_if (abstract memory interface)
-└── connects backing store
-```
+## Next Steps
 
-## Configuration Parameters
-
-Edit `cache_pkg.sv` to adjust:
-- `ADDR_WIDTH` (32 bits) — address space
-- `DATA_WIDTH` (32 bits) — word size
-- `LINE_SIZE` (16 bytes) — cache line size
-- `NUM_SETS` (16) — number of sets
-- `WAYS` (2) — associativity
-- `MEM_LATENCY` (4 cycles) — simulated backing store latency
-
-## Basys3 FPGA Synthesis
-
-### Files
-- `basys3.xdc` — Pin constraints for 100 MHz clock, reset, 16 LEDs, 4-digit 7-segment display
-- `basys3_top.sv` — Counter test module (use as starting point for cache integration)
-
-### Pin Mapping
-- **Clock**: W5 (100 MHz)
-- **Reset**: U18 (Button 0, active high → invert in RTL if using active-low)
-- **LEDs**: U16, E19, U19, V19, W18, U15, U14, V14, V13, V3, W3, U3, P3, N3, P1, L1
-- **7-Segment Display**: W7-V7 (segments), U2-W4 (anodes)
-
-### To Synthesize
-1. Create a new Vivado project for Basys3 (Artix-7, XC7A35T-1CPG236C)
-2. Add RTL files from `src/` and constraints from `basys3.xdc`
-3. Set top module to `basys3_top` or integrate cache_controller as needed
-4. Run synthesis, implementation, and bitstream generation
-
-## Design Goals & Roadmap
-
-### Phase 2: Clock Domain Crossing (Planned)
-Decouple the cache logic from external interfaces and backing memory by adding **Clock Domain Crossing (CDC)** synchronizers. This adds architectural depth and handles real-world multi-clock systems.
-
-**Rationale**: Real designs often have different clock domains (e.g., core clock, memory clock, external I/O clock). Synchronous caches require CDC to prevent metastability and data corruption.
-
-**Implementation Strategy**:
-1. **CDC FIFO between DMA and Cache**: Async burst descriptor queue with gray-code pointers
-   - Allows DMA to run on an independent `clk_dma` while cache runs on `clk_core`
-   
-2. **CDC Handshake for mem_if**: Toggle-based synchronizer for memory transaction valid/done signals
-   - Decouples cache controller (core clock) from memory subsystem (potentially slower/faster clock)
-   
-3. **Instrumentation CDC**: Separate clock domain for cycle counting and statistics
-   - Avoids timing closure impact on critical path
-
-**Key CDC Techniques**:
-- Gray-code pointers for read/write pointers in async FIFOs
-- Toggle synchronizers for single-bit control signals
-- Double-flop registers for async inputs
-- Clock domain boundary documentation in module headers
-
-### Phase 3: Performance Enhancements (Future)
-- Pipelined request handling (multiple outstanding requests)
-- Configurable replacement policy (LRU, PLRU, random)
-- Write-back vs write-through modes
-- Prefetch logic and stream detection
-
-## Testing
-
-Run simulation with `tb/cache_tb.sv`:
-```bash
-# Compile and run (simulation tool command)
-# Examine waveforms for hit rates, latencies, and memory transactions
-```
-
-## Project Structure
-
-```
-cache-project/
-├── README.md                 # This file
-├── src/                      # RTL modules
-│   ├── cache_pkg.sv         # Parameters and typedefs
-│   ├── cache_controller.sv  # Top-level cache logic
-│   ├── tag_array.sv         # Tag storage and comparison
-│   ├── data_array.sv        # Cache line data storage
-│   ├── tag_compare.sv       # Hit/miss detection
-│   ├── replacement_policy.sv # Eviction policy
-│   ├── miss_fsm.sv          # Memory transaction FSM
-│   └── mem_if.sv            # Abstract memory interface
-├── tb/
-│   └── cache_tb.sv          # Testbench
-├── doc/
-│   └── README.md            # Archived design documentation
-├── basys3.xdc               # Vivado constraints for Basys3
-├── basys3_top.sv            # Basys3 synthesis test module
-├── scripts/                 # Build and simulation scripts
-└── sim/                     # Simulation outputs
-```
-
-## Deliverables
-
-- SystemVerilog RTL modules with clear port definitions
-- Package file (`cache_pkg.sv`) for all typedefs and parameters
-- Synthesizable code targeting Artix-7 FPGAs (Basys3)
-- CDC implementation with metastability protection (Phase 2)
-- Comprehensive documentation and testbench
+See `futurePlans.md` for the roadmap (clock domain crossing, performance stuff, etc.)
