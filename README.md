@@ -21,7 +21,7 @@ L1 cache implementation (2-way set-associative) with DMA streaming interface. Cu
 - `basys3_top.sv` — simple counter test (LEDs + 7-seg display)
 
 **Testing**:
-- `tb/cache_tb.sv` — simulation testbench
+- `tb/cache_tb.sv` — comprehensive testbench (requires Verilator; Icarus Verilog doesn't support advanced SystemVerilog features used here)
 
 ## Quick Start
 
