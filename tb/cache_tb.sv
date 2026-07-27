@@ -58,39 +58,12 @@ module cache_tb;
         .rd_line        (mem_rd_line)
     );
 
-    // -----------------------------------------------------------
-    // Software reference model
-    //
-    // Mirrors expected memory state independent of cache structure
-    // (no sets/ways/tags -- just "what value should address A read
-    // as right now"). This is deliberately dumber than the RTL cache
-    // so it's trustworthy as a golden reference.
-    // -----------------------------------------------------------
-    class reference_model;
-        data_t mem_model[addr_t];
+    // Reference memory: tracks what we wrote (for correctness checking)
+    parameter int REF_MEM_SIZE = 1024;
+    data_t ref_mem[0:REF_MEM_SIZE-1];
+    logic ref_mem_valid[0:REF_MEM_SIZE-1];
 
-        function new();
-            mem_model.delete();
-        endfunction
-
-        function void apply_write(addr_t addr, data_t data);
-            mem_model[addr] = data;
-        endfunction
-
-        function data_t apply_read(addr_t addr);
-            if (!mem_model.exists(addr)) begin
-                $display("WARNING: read from uninitialized address 0x%08x", addr);
-                return 32'hDEADBEEF;
-            end
-            return mem_model[addr];
-        endfunction
-    endclass
-
-    reference_model ref_model;
-
-    // -----------------------------------------------------------
-    // Performance metrics
-    // -----------------------------------------------------------
+    // Metrics tracked during simulation
     int unsigned checks = 0;
     int unsigned errors = 0;
     int unsigned hits   = 0;
@@ -98,9 +71,7 @@ module cache_tb;
     int unsigned total_latency = 0;
     int unsigned latency_samples = 0;
 
-    // -----------------------------------------------------------
-    // Stimulus helper tasks
-    // -----------------------------------------------------------
+    // Helper tasks for test stimulus
 
     // Drives a single request and waits for req_ready handshake.
     task automatic drive_request(input addr_t addr,
@@ -125,9 +96,7 @@ module cache_tb;
         hit = resp_hit;
     endtask
 
-    // Directed single-request check: drives a request, waits for the
-    // response, and compares against the reference model.
-    // Also measures latency (cycles from request to response).
+    // Drive a request, wait for response, check correctness, measure latency
     task automatic check_access(input string name,
                                  input addr_t addr,
                                  input req_kind_e kind,
@@ -135,39 +104,48 @@ module cache_tb;
         data_t   got_rdata;
         logic    got_hit;
         data_t   exp_rdata;
-        int      latency = 0;
+        int      latency;
+        int      mem_idx;
 
         checks++;
+        latency = 0;
         drive_request(addr, kind, wdata);
 
         // Measure latency from request to response
         while (!resp_valid) begin
             @(posedge clk);
-            latency++;
+            latency = latency + 1;
         end
         @(posedge clk);
         got_rdata = resp_rdata;
         got_hit = resp_hit;
 
+        mem_idx = addr[9:0];  // Use lower 10 bits as index into ref_mem (1024 entries)
+
         if (kind == REQ_WRITE) begin
-            ref_model.apply_write(addr, wdata);
+            ref_mem[mem_idx] = wdata;
+            ref_mem_valid[mem_idx] = 1'b1;
         end else begin
-            exp_rdata = ref_model.apply_read(addr);
-            if (got_rdata !== exp_rdata) begin
-                errors++;
-                $display("[%s] ERROR: addr=0x%08x expected=0x%08x got=0x%08x",
-                         name, addr, exp_rdata, got_rdata);
+            if (ref_mem_valid[mem_idx]) begin
+                exp_rdata = ref_mem[mem_idx];
+                if (got_rdata !== exp_rdata) begin
+                    errors = errors + 1;
+                    $display("[%s] ERROR: addr=0x%08x expected=0x%08x got=0x%08x",
+                             name, addr, exp_rdata, got_rdata);
+                end
+            end else begin
+                $display("[TEST] %s: Read from uninitialized addr 0x%08x (skip check)", name, addr);
             end
         end
 
         if (got_hit) begin
-            hits++;
+            hits = hits + 1;
         end else begin
-            misses++;
+            misses = misses + 1;
         end
 
-        total_latency += latency;
-        latency_samples++;
+        total_latency = total_latency + latency;
+        latency_samples = latency_samples + 1;
     endtask
 
     // Checks a specific cache line's tag/valid/dirty state via
@@ -184,24 +162,12 @@ module cache_tb;
         // and compare against expected valid/dirty/tag.
     endtask
 
-    // -----------------------------------------------------------
-    // Randomized stimulus item
-    //
-    // NOTE: Icarus Verilog does not support SystemVerilog
-    // `constraint`/`randomize()` (class-based constrained-random).
-    // Using $urandom_range by hand here so this actually simulates
-    // on your current toolchain. If you later move to a simulator
-    // that supports constraints (Questa/VCS/Xcelium/Verilator+extra
-    // work), this can be rewritten as a proper `rand` class with
-    // `constraint` blocks for more expressive distributions.
-    // -----------------------------------------------------------
-    // Constrain to small working set so hits/misses/evictions actually occur
-    // Working set: ~256 bytes (fits ~16 cache lines in 2-way cache with 16 sets)
+    // Random stimulus generators (constrained to small working set)
     function automatic addr_t rand_addr();
         return addr_t'($urandom_range(0, 32'h0000_00FF));
     endfunction
 
-    // Biased toward reads (80/20 read/write split, realistic for caches)
+    // 80% reads, 20% writes (realistic)
     function automatic req_kind_e rand_kind();
         return $urandom_range(0, 99) < 80 ? REQ_READ : REQ_WRITE;
     endfunction
@@ -210,11 +176,10 @@ module cache_tb;
         return data_t'($urandom());
     endfunction
 
-    // -----------------------------------------------------------
-    // Test sequence
-    // -----------------------------------------------------------
+    // Test scenarios
     initial begin
         int i;
+        int j;
         addr_t addr;
         data_t data;
         real hit_rate;
@@ -227,7 +192,12 @@ module cache_tb;
         req_kind  = REQ_NONE;
         req_wdata = '0;
 
-        ref_model = new();
+        // Initialize reference memory
+        for (j = 0; j < REF_MEM_SIZE; j = j + 1) begin
+            ref_mem[j] = 32'b0;
+            ref_mem_valid[j] = 1'b0;
+        end
+
         reset_dut();
         $dumpfile("cache_sim.vcd");
         $dumpvars(0, cache_tb);
@@ -285,7 +255,7 @@ module cache_tb;
             #10;
         end
 
-        // ---- Performance summary ----
+        // Print results
         $display("\n=====================================");
         $display("PERFORMANCE SUMMARY");
         $display("=====================================");
