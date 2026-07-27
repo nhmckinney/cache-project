@@ -214,6 +214,12 @@ module cache_tb;
     // Test sequence
     // -----------------------------------------------------------
     initial begin
+        int i;
+        addr_t addr;
+        data_t data;
+        real hit_rate;
+        real avg_latency;
+
         clk = 0;
         rst_n = 0;
         req_valid = 1'b0;
@@ -223,35 +229,37 @@ module cache_tb;
 
         ref_model = new();
         reset_dut();
+        $dumpfile("cache_sim.vcd");
+        $dumpvars(0, cache_tb);
 
         // ---- Test 1: Sequential reads (all hits after first miss) ----
         $display("\n=== TEST 1: Sequential Reads ===");
-        for (int i = 0; i < 5; i++) begin
-            addr_t addr = addr_t'(32'h00000000 + (i << 2));
+        for (i = 0; i < 5; i = i + 1) begin
+            addr = addr_t'(32'h00000000 + (i << 2));
             check_access($sformatf("seq_read_%0d", i), addr, REQ_READ, 32'b0);
             #10;
         end
 
         // ---- Test 2: Sequential writes (all misses, fills cache) ----
         $display("\n=== TEST 2: Sequential Writes ===");
-        for (int i = 0; i < 8; i++) begin
-            addr_t addr = addr_t'(32'h00000100 + (i << 2));
-            data_t data = data_t'(32'hDEAD_0000 + i);
+        for (i = 0; i < 8; i = i + 1) begin
+            addr = addr_t'(32'h00000100 + (i << 2));
+            data = data_t'(32'hDEAD_0000 + i);
             check_access($sformatf("seq_write_%0d", i), addr, REQ_WRITE, data);
             #10;
         end
 
         // ---- Test 3: Read back written data (expect hits) ----
         $display("\n=== TEST 3: Read-After-Write (Expect Hits) ===");
-        for (int i = 0; i < 8; i++) begin
-            addr_t addr = addr_t'(32'h00000100 + (i << 2));
+        for (i = 0; i < 8; i = i + 1) begin
+            addr = addr_t'(32'h00000100 + (i << 2));
             check_access($sformatf("read_after_write_%0d", i), addr, REQ_READ, 32'b0);
             #10;
         end
 
         // ---- Test 4: Random access pattern ----
         $display("\n=== TEST 4: Random Access Pattern (200 accesses) ===");
-        for (int i = 0; i < 200; i++) begin
+        for (i = 0; i < 200; i = i + 1) begin
             check_access($sformatf("random_%0d", i),
                          rand_addr(), rand_kind(), rand_wdata());
             #5;
@@ -262,18 +270,18 @@ module cache_tb;
         // Compute how many distinct addresses fill the cache:
         // 16 sets * 2 ways = 32 cache lines * 16 bytes/line = 512 bytes
         // So writing to sequential addresses should eventually evict
-        for (int i = 0; i < 40; i++) begin
-            addr_t addr = addr_t'(32'h00000200 + (i << 4));  // 16-byte stride
-            data_t data = data_t'(32'hCAFE_0000 + i);
+        for (i = 0; i < 40; i = i + 1) begin
+            addr = addr_t'(32'h00000200 + (i << 4));  // 16-byte stride
+            data = data_t'(32'hCAFE_0000 + i);
             check_access($sformatf("saturate_%0d", i), addr, REQ_WRITE, data);
             #10;
         end
 
         // ---- Test 6: Verify LRU eviction by accessing old data ----
         $display("\n=== TEST 6: Verify LRU Eviction (Should Miss) ===");
-        for (int i = 0; i < 10; i++) begin
-            addr_t old_addr = addr_t'(32'h00000200 + (i << 4));
-            check_access($sformatf("verify_evict_%0d", i), old_addr, REQ_READ, 32'b0);
+        for (i = 0; i < 10; i = i + 1) begin
+            addr = addr_t'(32'h00000200 + (i << 4));
+            check_access($sformatf("verify_evict_%0d", i), addr, REQ_READ, 32'b0);
             #10;
         end
 
@@ -287,49 +295,24 @@ module cache_tb;
         $display("Misses:             %0d", misses);
 
         if (hits + misses > 0) begin
-            real hit_rate = (100.0 * hits) / (hits + misses);
+            hit_rate = (100.0 * hits) / (hits + misses);
             $display("Hit Rate:           %.2f%%", hit_rate);
         end
 
         if (latency_samples > 0) begin
-            real avg_latency = real'(total_latency) / real'(latency_samples);
+            avg_latency = real'(total_latency) / real'(latency_samples);
             $display("Average Latency:    %.2f cycles", avg_latency);
         end
 
         $display("=====================================");
 
         if (errors == 0) begin
-            $display("ALL CHECKS PASSED ✓");
+            $display("ALL CHECKS PASSED");
         end else begin
             $display("FAILURES: %0d CHECK(S) FAILED", errors);
         end
 
         $finish;
     end
-
-    // -----------------------------------------------------------
-    // SVA invariant checks
-    // -----------------------------------------------------------
-
-    // Invariant: A cache line cannot be dirty if invalid
-    property inv_dirty_implies_valid;
-        @(posedge clk) disable iff (!rst_n)
-        // This would bind to tag_array's internal storage if we had visibility
-        // For now, relies on correctness of check_access against ref_model
-        1'b1;
-    endproperty
-    // assert property (inv_dirty_implies_valid);
-
-    // Invariant: resp_valid should assert only once per request
-    // (prevents duplicate responses)
-    property single_response_per_request;
-        @(posedge clk) disable iff (!rst_n)
-        (req_valid && req_ready) |-> ##[1:100] (resp_valid [*1]);
-    endproperty
-    // assert property (single_response_per_request);
-
-    // Note: Full SVA would require exposing cache_controller's internal
-    // tag/data array state. For now, functional correctness is verified
-    // via the reference model comparison in check_access().
 
 endmodule : cache_tb
