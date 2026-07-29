@@ -43,7 +43,7 @@ package cache_pkg;
         tag_t   tag;
     } tag_entry_t;
 
-    // Request type driven into cache_controller from dma_stream_if
+    // Request type driven into cache_controller
     typedef enum logic [1:0] {
         REQ_NONE  = 2'b00,
         REQ_READ  = 2'b01,

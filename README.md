@@ -1,10 +1,10 @@
 # Cache Project
 
-L1 cache implementation (2-way set-associative) with DMA streaming interface. Currently working on getting it to synthesize on a Basys3.
+L1 cache implementation (2-way set-associative). Currently working on getting it to synthesize on a Basys3.
 
 ## Status
 
-- Core RTL done (tag/data arrays, hit/miss detection, miss FSM, DMA interface)
+- Core RTL done (tag/data arrays, hit/miss detection, miss FSM)
 - Basys3 constraints and test counter module
 - Next: validate synthesis, integrate cache to hardware
 

@@ -2,8 +2,7 @@
 //
 // Top-level cache datapath + control. Instantiates tag_array,
 // data_array, tag_compare, replacement_policy, and miss_fsm; wires
-// them together and exposes a simple request/response interface to
-// dma_stream_interface (or directly to a testbench, as here).
+// them together and exposes a simple request/response interface.
 //
 // Request/response protocol: single-request-at-a-time to start
 // (req_valid/req_ready handshake in, resp_valid pulses out with
