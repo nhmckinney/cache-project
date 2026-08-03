@@ -1,6 +1,7 @@
 /// Basys3 Test Module - Counter Display
-/// Displays a 16-bit counter on the 16 LEDs and 4-digit 7-segment display
-/// Counter increments at ~1 Hz for easy visual observation
+/// Displays a 16-bit counter on the 16 LEDs and its decimal value (0-9999)
+/// on the 4-digit 7-segment display. Counter increments at ~1 Hz for easy
+/// visual observation.
 
 module basys3_top (
     input  logic        clk,
@@ -44,10 +45,31 @@ module basys3_top (
     assign led = led_counter;
 
     // 7-segment display controller
-    // Multiplexes between 4 digits, each displaying one hex nibble
+    // Multiplexes between 4 digits, each displaying one decimal digit
     logic [3:0] digit_value;
     logic [1:0] digit_select;
     logic [26:0] refresh_divider;
+
+    // Binary-to-BCD conversion (double dabble) for decimal display
+    logic [3:0] bcd_thousands, bcd_hundreds, bcd_tens, bcd_ones;
+
+    always_comb begin
+        logic [15:0] value;
+        logic [31:0] shift_reg;
+        value = (led_counter > 16'd9999) ? (led_counter % 16'd10000) : led_counter;
+        shift_reg = {16'b0, value};
+        for (int i = 0; i < 16; i++) begin
+            if (shift_reg[19:16] >= 5) shift_reg[19:16] += 3;
+            if (shift_reg[23:20] >= 5) shift_reg[23:20] += 3;
+            if (shift_reg[27:24] >= 5) shift_reg[27:24] += 3;
+            if (shift_reg[31:28] >= 5) shift_reg[31:28] += 3;
+            shift_reg = shift_reg << 1;
+        end
+        bcd_ones      = shift_reg[19:16];
+        bcd_tens      = shift_reg[23:20];
+        bcd_hundreds  = shift_reg[27:24];
+        bcd_thousands = shift_reg[31:28];
+    end
 
     // Digit refresh clock (~1 kHz for smooth multiplexing)
     always_ff @(posedge clk or negedge rst_n) begin
@@ -64,13 +86,13 @@ module basys3_top (
         end
     end
 
-    // Multiplex counter to display 4 hex digits
+    // Multiplex counter to display 4 decimal digits
     always_comb begin
         case (digit_select)
-            2'd0: digit_value = led_counter[3:0];      // Digit 0 (rightmost)
-            2'd1: digit_value = led_counter[7:4];      // Digit 1
-            2'd2: digit_value = led_counter[11:8];     // Digit 2
-            2'd3: digit_value = led_counter[15:12];    // Digit 3 (leftmost)
+            2'd0: digit_value = bcd_ones;       // Digit 0 (rightmost)
+            2'd1: digit_value = bcd_tens;       // Digit 1
+            2'd2: digit_value = bcd_hundreds;   // Digit 2
+            2'd3: digit_value = bcd_thousands;  // Digit 3 (leftmost)
             default: digit_value = 4'b0;
         endcase
     end
@@ -86,7 +108,7 @@ module basys3_top (
         endcase
     end
 
-    // Hex to 7-segment decoder
+    // Decimal digit to 7-segment decoder
     // Common cathode: 1 = LED on, 0 = LED off
     // seg[7:0] = {DP, G, F, E, D, C, B, A}
     always_comb begin
@@ -101,12 +123,6 @@ module basys3_top (
             4'h7: seg = 8'b00000111;  // 7
             4'h8: seg = 8'b01111111;  // 8
             4'h9: seg = 8'b01101111;  // 9
-            4'hA: seg = 8'b01110111;  // A
-            4'hB: seg = 8'b01111100;  // B
-            4'hC: seg = 8'b00111001;  // C
-            4'hD: seg = 8'b01011110;  // D
-            4'hE: seg = 8'b01111001;  // E
-            4'hF: seg = 8'b01110001;  // F
             default: seg = 8'b00000000;
         endcase
     end
