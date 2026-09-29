@@ -1,37 +1,22 @@
-# Cache Project
+# Two-way set-associative L1 cache (SystemVerilog)
 
-L1 cache implementation (2-way set-associative). Currently working on getting it to synthesize on a Basys3.
+RTL prototype of a small L1 cache, with separate tag and data arrays, hit detection, replacement logic, and a miss state machine. The default configuration in `src/cache_pkg.sv` is 16 sets, 2 ways, 32-bit data, and 16-byte lines.
+
+## Repository map
+
+| Path | Purpose |
+| --- | --- |
+| `src/cache_controller.sv` | Top-level cache control and request/response handling. |
+| `src/tag_array.sv`, `src/data_array.sv` | Tag and cache-line storage. |
+| `src/tag_compare.sv`, `src/replacement_policy.sv`, `src/miss_fsm.sv` | Hit lookup, replacement, and miss flow. |
+| `src/memory_interface.sv` | Backing-memory interface used by the cache design. |
+| `tb/cache_tb.sv` | SystemVerilog testbench with a reference memory and check/error, hit/miss, and latency counters. |
+| `basys3_top.sv`, `basys3.xdc` | Basys3 switch-to-LED top and pin constraints. |
 
 ## Status
 
-- Core RTL done (tag/data arrays, hit/miss detection, miss FSM)
-- Basys3 constraints and test counter module
-- Next: validate synthesis, integrate cache to hardware
+The cache RTL and testbench are present. The Basys3 top currently demonstrates switch-to-LED passthrough; it does not exercise the cache. Cache integration with the [RV32I CPU](https://github.com/nhmckinney/riscv-cpu), FPGA synthesis/timing validation, and published simulation results remain next steps.
 
-## What's in Here
+## Next steps
 
-**RTL modules** (`src/`):
-- `cache_controller.sv` — main logic
-- `tag_array.sv`, `data_array.sv` — storage
-- `tag_compare.sv`, `replacement_policy.sv`, `miss_fsm.sv` — cache operations
-- `cache_pkg.sv` — params (16 sets, 2 ways, 32-bit words)
-
-**Basys3 stuff**:
-- `basys3.xdc` — pin constraints for Artix-7
-- `basys3_top.sv` — simple counter test (LEDs + 7-seg display)
-
-**Testing**:
-- `tb/cache_tb.sv` — comprehensive testbench (requires Verilator; Icarus Verilog doesn't support advanced SystemVerilog features used here)
-
-## Quick Start
-
-To synthesize the test counter on Basys3:
-1. Create Vivado project (Artix-7, XC7A35T)
-2. Add files from `src/` and `basys3.xdc` constraint
-3. Set top module to `basys3_top`
-4. Synthesize → implement → generate bitstream
-5. Program and watch the counter increment on LEDs/7-seg
-
-## Next Steps
-
-See `futurePlans.md` for the roadmap (clock domain crossing, performance stuff, etc.)
+Run the cache testbench with a simulator that supports its SystemVerilog features, record reproducible correctness and latency results, connect the cache to the CPU memory stage, and validate the integrated design on Basys3.
